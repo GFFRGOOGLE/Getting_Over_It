@@ -1,4 +1,4 @@
-// src/main.js — точка входа
+// SRC/main.js — Шаг 3 (Исправленная физика)
 import { Particle, DistanceConstraint, Segment, World } from './physics.js';
 
 const canvas = document.getElementById('game');
@@ -20,25 +20,29 @@ window.addEventListener('orientationchange', resize);
 // --- Мир ---
 const world = new World();
 
-// Тестовый уровень (пока черновой — потом заменим на настоящую карту)
-const LEVEL_W = 2000;
-world.addSegment(new Segment(0, 600, LEVEL_W, 600, 0.85)); // земля
-world.addSegment(new Segment(400, 600, 400, 450, 0.9));   // столбик 1
-world.addSegment(new Segment(700, 600, 700, 500, 0.9));   // столбик 2
-world.addSegment(new Segment(700, 500, 1000, 500, 0.9));  // площадка
-world.addSegment(new Segment(1000, 500, 1200, 500, 0.9)); // продолжение
-world.addSegment(new Segment(1200, 500, 1200, 400, 0.9)); // ступенька
+// Карта (гора)
+world.addSegment(new Segment(-500, 600, 5000, 600, 0.85)); // Земля
+world.addSegment(new Segment(300, 600, 300, 400, 0.9));    // 1
+world.addSegment(new Segment(300, 400, 600, 300, 0.9));    // 2
+world.addSegment(new Segment(600, 300, 800, 300, 0.9));    // 3
+world.addSegment(new Segment(800, 300, 800, 100, 0.9));    // 4
+world.addSegment(new Segment(800, 100, 1100, 50, 0.9));    // 5
+world.addSegment(new Segment(1100, 50, 1300, 150, 0.9));   // 6
+world.addSegment(new Segment(1300, 150, 1500, -200, 0.9)); // 7
 
-// Игрок: котёл + голова молотка, соединены жёсткой связью
-const pot = new Particle(200, 570, 30, 1);
-const head = new Particle(200, 430, 14, 1);
+// --- Игрок ---
+// Котёл делаем тяжелым (invMass = 0.2, то есть масса 5)
+const pot = new Particle(100, 570, 30, 0.2); 
+// Молот легче (invMass = 1)
+const head = new Particle(100, 430, 14, 1); 
 world.addParticle(pot);
 world.addParticle(head);
+
 const poleLength = 140;
 world.addConstraint(new DistanceConstraint(pot, head, poleLength));
 
-// --- Ввод (мышь + тач через Pointer Events) ---
-const input = { x: 200, y: 430, active: false };
+// --- Ввод ---
+const input = { x: 100, y: 430, active: false };
 
 function updatePointer(e) {
   const rect = canvas.getBoundingClientRect();
@@ -65,12 +69,12 @@ canvas.addEventListener('pointercancel', (e) => {
 const camera = { x: 0, y: 0 };
 function updateCamera() {
   const tx = pot.x - VIEW.width / 2;
-  const ty = pot.y - VIEW.height / 2;
-  camera.x += (tx - camera.x) * 0.15;
-  camera.y += (ty - camera.y) * 0.15;
+  const ty = (pot.y - 100) - VIEW.height / 2;
+  camera.x += (tx - camera.x) * 0.1;
+  camera.y += (ty - camera.y) * 0.1;
 }
 
-// --- Цикл с фиксированным шагом ---
+// --- Цикл ---
 const FIXED_DT = 1 / 120;
 let acc = 0;
 let lastTime = performance.now();
@@ -90,44 +94,64 @@ function loop(now) {
 
 function step(dt) {
   if (input.active) {
-    // Мировая точка курсора
     const mx = input.x + camera.x;
     const my = input.y + camera.y;
-    // Направление от котла к курсору
+    
+    // Вектор от котла к пальцу/мыши
     let dx = mx - pot.x;
     let dy = my - pot.y;
     const dl = Math.hypot(dx, dy) || 1;
     dx /= dl; dy /= dl;
-    // Желаемая позиция головы — на окружности радиуса poleLength
+    
+    // Идеальная позиция для головы молота (на расстоянии длины палки от котла)
     const tx = pot.x + dx * poleLength;
     const ty = pot.y + dy * poleLength;
-    // Тянем голову к этой точке через скорость, с потолком
+    
+    // Разница между идеальной позицией и текущей
     let hx = tx - head.x;
     let hy = ty - head.y;
-    const hd = Math.hypot(hx, hy) || 1;
-    const speed = Math.min(hd * 25, 1500);
-    head.px = head.x - (hx / hd) * speed * dt;
-    head.py = head.y - (hy / hd) * speed * dt;
+    
+    // ФИЗИКА: Вместо телепорта прикладываем "силу пружины"
+    const k = 1500; // Жесткость
+    let ax = hx * k;
+    let ay = hy * k;
+    
+    // Ограничиваем максимальную силу, чтобы не было реактивной тяги
+    const maxAccel = 6000;
+    const alen = Math.hypot(ax, ay);
+    if (alen > maxAccel) {
+      ax = (ax / alen) * maxAccel;
+      ay = (ay / alen) * maxAccel;
+    }
+    
+    // Применяем ускорение к молоту (через Verlet)
+    head.px -= ax * dt * dt;
+    head.py -= ay * dt * dt;
   }
+  
+  // Шаг физики (гравитация, коллизии, трение)
   world.step(dt);
-  // Упал с уровня — вернуть на старт
-  if (pot.y > 3000) {
-    pot.x = 200; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
-    head.x = 200; head.y = 430; head.px = head.x; head.py = head.y;
+  
+  // Упал вниз — респавн
+  if (pot.y > 1200) {
+    pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
+    head.x = 100; head.y = 430; head.px = head.x; head.py = head.y;
   }
 }
 
+// --- Отрисовка ---
 function render() {
-  ctx.fillStyle = '#1a1a1a';
+  ctx.fillStyle = '#1e1e24';
   ctx.fillRect(0, 0, VIEW.width, VIEW.height);
 
   ctx.save();
   ctx.translate(-camera.x, -camera.y);
 
   // Уровень
-  ctx.strokeStyle = '#666';
-  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 8;
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   for (const s of world.segments) {
     ctx.beginPath();
     ctx.moveTo(s.x1, s.y1);
@@ -135,39 +159,48 @@ function render() {
     ctx.stroke();
   }
 
-  // Древко молотка
-  ctx.strokeStyle = '#b88a5a';
-  ctx.lineWidth = 5;
+  // Молоток
+  ctx.strokeStyle = '#d4a373';
+  ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.moveTo(pot.x, pot.y);
   ctx.lineTo(head.x, head.y);
   ctx.stroke();
 
+  const angle = Math.atan2(head.y - pot.y, head.x - pot.x);
+  ctx.save();
+  ctx.translate(head.x, head.y);
+  ctx.rotate(angle);
+  ctx.fillStyle = '#888';
+  ctx.fillRect(-6, -16, 12, 32);
+  ctx.fillStyle = '#ccc';
+  ctx.fillRect(0, -20, 16, 40);
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, -20, 16, 40);
+  ctx.restore();
+
   // Котёл
-  ctx.fillStyle = '#3a3a4a';
+  ctx.fillStyle = '#2b2b36';
   ctx.beginPath();
   ctx.arc(pot.x, pot.y, pot.radius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#888';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 3;
   ctx.stroke();
 
-  // Голова молотка
-  ctx.fillStyle = '#a0a0a0';
+  // Человечек
+  ctx.save();
+  ctx.translate(pot.x, pot.y);
+  ctx.rotate(angle);
+  ctx.fillStyle = '#e0b088'; 
+  ctx.fillRect(-5, -30, 10, 20); 
   ctx.beginPath();
-  ctx.arc(head.x, head.y, head.radius, 0, Math.PI * 2);
+  ctx.arc(0, -35, 8, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#ddd';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
   ctx.restore();
 
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.font = '13px system-ui, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText('Веди мышью / пальцем — молоток следует за курсором', 12, VIEW.height - 12);
+  ctx.restore();
 }
 
 resize();
