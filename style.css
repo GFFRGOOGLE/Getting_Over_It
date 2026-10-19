@@ -1,0 +1,36 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1a1a1a;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #eee;
+  /* Отключаем тач-жесты браузера: скролл, зум, pull-to-refresh */
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#game-wrap {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* корректная высота на мобилках с адресной строкой */
+}
+
+canvas#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: none; /* прячем курсор — в игре он не нужен, молоток сам покажет позицию */
+  touch-action: none;
+}
