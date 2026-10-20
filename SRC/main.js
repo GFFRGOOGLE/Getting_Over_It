@@ -1,4 +1,3 @@
-// src/main.js
 import { Particle, DistanceConstraint, Segment, World } from './physics.js';
 
 const canvas = document.getElementById('game');
@@ -20,7 +19,7 @@ window.addEventListener('orientationchange', resize);
 const world = new World();
 world.gravity.y = 2000;
 
-// Гора слева
+// Гора слева с козырьком
 world.addSegment(new Segment(-300, 600, -300, -100, 0.95));
 world.addSegment(new Segment(-300, -100, 0, -50, 0.95));
 world.addSegment(new Segment(0, -50, 0, -300, 0.95));
@@ -35,10 +34,10 @@ world.addSegment(new Segment(600, 300, 800, 300, 0.95));
 world.addSegment(new Segment(800, 300, 800, 100, 0.95));    
 world.addSegment(new Segment(800, 100, 1100, 50, 0.95));    
 
-// Котёл тяжелый (invMass = 0.1, масса 10)
-const pot = new Particle(100, 570, 30, 0.1); 
-// Молот легче (invMass = 0.2, масса 5)
-const head = new Particle(100, 410, 20, 0.2); 
+// Котёл тяжелый (invMass = 0.05, масса 20)
+const pot = new Particle(100, 570, 30, 0.05); 
+// Молот легкий (invMass = 1.0, масса 1)
+const head = new Particle(100, 410, 20, 1.0); 
 
 world.addParticle(pot);
 world.addParticle(head);
@@ -96,32 +95,48 @@ function loop(now) {
 
 function step(dt) {
   if (input.active) {
-    const tx = input.x + camera.x;
-    const ty = input.y + camera.y;
+    // Координаты пальца в мире
+    const mx = input.x + camera.x;
+    const my = input.y + camera.y;
 
-    // Сила пружины, которая тянет молот к пальцу
-    const k = 150; // ОЧЕНЬ слабая пружина
-    const damping = 20; 
+    // Угол от котла к пальцу
+    const targetAngle = Math.atan2(my - pot.y, mx - pot.x);
+    // Текущий угол молота
+    let currentAngle = Math.atan2(head.y - pot.y, head.x - pot.x);
 
-    const vx = (head.x - head.px) / dt;
-    const vy = (head.y - head.py) / dt;
+    // Разница углов (от -PI до PI)
+    let diff = targetAngle - currentAngle;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
 
-    let ax = (tx - head.x) * k - vx * damping;
-    let ay = (ty - head.y) * k - vy * damping;
+    // ФИЗИКА: Угловой мотор. 
+    // Сила пропорциональна разнице углов.
+    const motorForce = diff * 5000; 
+    
+    // Ограничиваем максимальную силу, чтобы не было телепортации
+    const maxForce = 20000;
+    const force = Math.max(-maxForce, Math.min(maxForce, motorForce));
 
-    // Ограничение ускорения
-    const maxAccel = 15000; 
-    const alen = Math.hypot(ax, ay);
-    if (alen > maxAccel) {
-      ax = (ax / alen) * maxAccel;
-      ay = (ay / alen) * maxAccel;
+    // Прикладываем силу строго перпендикулярно палке (заставляем её вращаться)
+    const forceX = -Math.sin(currentAngle) * force;
+    const forceY = Math.cos(currentAngle) * force;
+
+    // Применяем к молоту
+    head.px -= forceX * dt * dt * head.invMass;
+    head.py -= forceY * dt * dt * head.invMass;
+
+    // Ограничение скорости для стабильности
+    let hvx = head.x - head.px;
+    let hvy = head.y - head.py;
+    const maxSpeed = 20; 
+    const speed = Math.hypot(hvx, hvy);
+    if (speed > maxSpeed) {
+      head.px = head.x - (hvx / speed) * maxSpeed;
+      head.py = head.y - (hvy / speed) * maxSpeed;
     }
-
-    // Применяем ускорение к молоту (с учетом его массы)
-    head.px -= ax * dt * dt * head.invMass;
-    head.py -= ay * dt * dt * head.invMass;
   }
 
+  // Шаг физики
   world.step(dt, 20);
 
   // Жёсткая страховка от проваливания
