@@ -1,4 +1,4 @@
-// SRC/main.js — Шаг 3 (Настоящая физика Getting Over It)
+// src/main.js — Полная сборка игры
 import { Particle, DistanceConstraint, Segment, World } from './physics.js';
 
 const canvas = document.getElementById('game');
@@ -19,26 +19,32 @@ window.addEventListener('orientationchange', resize);
 
 // --- Мир ---
 const world = new World();
-world.gravity.y = 2500; // Усилили гравитацию
+world.gravity.y = 2000;
 
-// Земля с очень высоким трением (1.0 = не скользит)
-world.addSegment(new Segment(-5000, 600, 5000, 600, 1.0));
+// ЛЕВАЯ ГОРА С КОЗЫРЬКОМ
+world.addSegment(new Segment(-300, 600, -300, -100, 0.95)); // Стена
+world.addSegment(new Segment(-300, -100, 0, -50, 0.95));    // Козырек
+world.addSegment(new Segment(0, -50, 0, -300, 0.95));       // Стена наверх
 
-// Препятствия
-world.addSegment(new Segment(300, 600, 300, 400, 0.95));    
-world.addSegment(new Segment(300, 400, 600, 300, 0.95));    
-world.addSegment(new Segment(600, 300, 800, 300, 0.95));    
-world.addSegment(new Segment(800, 300, 800, 100, 0.95));    
-world.addSegment(new Segment(800, 100, 1100, 50, 0.95));    
+// ЗЕМЛЯ (высокое трение)
+world.addSegment(new Segment(-300, 600, 5000, 600, 0.95));
+
+// ПРЕПЯТСТВИЯ СПРАВА
+world.addSegment(new Segment(300, 600, 300, 400, 0.95));    // Столб
+world.addSegment(new Segment(300, 400, 600, 300, 0.95));    // Наклонный склон
+world.addSegment(new Segment(600, 300, 800, 300, 0.95));    // Площадка
+world.addSegment(new Segment(800, 300, 800, 100, 0.95));    // Отвесная стена
+world.addSegment(new Segment(800, 100, 1100, 50, 0.95));    // Уступ
 
 // --- Игрок ---
-// Котёл ОЧЕНЬ тяжелый (invMass = 0.02, то есть масса 50)
-const pot = new Particle(100, 570, 30, 0.02); 
-// Молот имеет нормальный вес (invMass = 0.5, масса 2)
+// Котёл тяжелый (масса 5, invMass = 0.2)
+const pot = new Particle(100, 570, 30, 0.2); 
+// Молот (масса 2, invMass = 0.5)
 const head = new Particle(100, 410, 20, 0.5); 
 world.addParticle(pot);
 world.addParticle(head);
 
+// Длина палки
 const poleLength = 180;
 world.addConstraint(new DistanceConstraint(pot, head, poleLength));
 
@@ -98,9 +104,9 @@ function step(dt) {
     const tx = input.x + camera.x;
     const ty = input.y + camera.y;
 
-    // Пружина, которая тянет молот к пальцу
-    const k = 1000; 
-    const damping = 50; 
+    // Физика тянет молот к пальцу
+    const k = 4000; 
+    const damping = 150; 
 
     const vx = (head.x - head.px) / dt;
     const vy = (head.y - head.py) / dt;
@@ -108,8 +114,8 @@ function step(dt) {
     let ax = (tx - head.x) * k - vx * damping;
     let ay = (ty - head.y) * k - vy * damping;
 
-    // СИЛА ОГРАНИЧЕНА! Теперь палец не может поднять котёл в воздух просто так.
-    const maxAccel = 8000; 
+    // Ограничиваем силу, чтобы нельзя было поднять котёл в воздух
+    const maxAccel = 20000; 
     const alen = Math.hypot(ax, ay);
     if (alen > maxAccel) {
       ax = (ax / alen) * maxAccel;
@@ -118,12 +124,22 @@ function step(dt) {
 
     head.px -= ax * dt * dt;
     head.py -= ay * dt * dt;
+
+    // Ограничение скорости
+    let hvx = head.x - head.px;
+    let hvy = head.y - head.py;
+    const maxSpeed = 25; 
+    const speed = Math.hypot(hvx, hvy);
+    if (speed > maxSpeed) {
+      head.px = head.x - (hvx / speed) * maxSpeed;
+      head.py = head.y - (hvy / speed) * maxSpeed;
+    }
   }
 
-  // Шаг физики (20 итераций для надежного трения)
+  // Итераций побольше для надежного трения
   world.step(dt, 20);
 
-  // Жесткий пол (защита от проваливания)
+  // Жесткий пол (страховка)
   if (pot.y > 600 - pot.radius) {
     pot.y = 600 - pot.radius;
     pot.py = pot.y;
@@ -133,7 +149,6 @@ function step(dt) {
     head.py = head.y;
   }
 
-  // Респавн
   if (pot.y > 1200) {
     pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
     head.x = 100; head.y = 410; head.px = head.x; head.py = head.y;
@@ -150,11 +165,11 @@ function render() {
 
   // Земля
   ctx.fillStyle = '#2a2a30';
-  ctx.fillRect(-5000, 600, 10000, 2000);
+  ctx.fillRect(-300, 600, 5300, 2000);
   
   // Линии уровня
   ctx.strokeStyle = '#555';
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 8;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const s of world.segments) {
@@ -172,7 +187,7 @@ function render() {
   ctx.lineTo(head.x, head.y);
   ctx.stroke();
 
-  // --- Котёл ---
+  // Котёл
   ctx.fillStyle = '#2b2b36';
   ctx.beginPath();
   ctx.arc(pot.x, pot.y, pot.radius, 0, Math.PI * 2);
@@ -181,20 +196,18 @@ function render() {
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  // --- Человечек (всегда смотрит вверх) ---
+  // Человечек
   ctx.fillStyle = '#e0b088';
   ctx.fillRect(pot.x - 8, pot.y - 38, 16, 30); 
   ctx.beginPath();
   ctx.arc(pot.x, pot.y - 48, 11, 0, Math.PI * 2);
   ctx.fill();
   
-  // Глаз
   ctx.fillStyle = '#000';
   ctx.beginPath();
   ctx.arc(pot.x + 4, pot.y - 50, 2.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Ободок котла
   ctx.strokeStyle = '#888';
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -202,7 +215,7 @@ function render() {
   ctx.lineTo(pot.x + pot.radius - 5, pot.y - 10);
   ctx.stroke();
 
-  // --- Голова молота ---
+  // Голова молота
   const angle = Math.atan2(head.y - pot.y, head.x - pot.x);
   ctx.save();
   ctx.translate(head.x, head.y);
