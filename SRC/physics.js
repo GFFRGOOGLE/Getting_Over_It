@@ -1,11 +1,12 @@
 const DAMPING = 0.998;
 
 export class Particle {
-  constructor(x, y, radius = 0, invMass = 1) {
+  constructor(x, y, radius = 0, invMass = 1, friction = 1.0) {
     this.x = x;   this.y = y;
     this.px = x;  this.py = y;
     this.radius = radius;
     this.invMass = invMass;
+    this.friction = friction;
   }
 
   integrate(dt, gx, gy) {
@@ -82,7 +83,6 @@ function resolveCircleSegment(p, seg) {
     ny = dy / d;
   }
   
-  // Защита от проваливания сквозь горизонтальный пол
   if (seg.y1 === seg.y2 && p.y > seg.y1) {
     ny = -1; nx = 0; d = p.y - seg.y1;
   }
@@ -99,8 +99,10 @@ function resolveCircleSegment(p, seg) {
   const tvx = vx - nx * vn;
   const tvy = vy - ny * vn;
   
-  p.px = p.x - (nx * vn + tvx * (1 - seg.friction));
-  p.py = p.y - (ny * vn + tvy * (1 - seg.friction));
+  // Считаем трение с учетом материала объекта
+  const totalFriction = seg.friction * p.friction;
+  p.px = p.x - (nx * vn + tvx * (1 - totalFriction));
+  p.py = p.y - (ny * vn + tvy * (1 - totalFriction));
   return true;
 }
 
