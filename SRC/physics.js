@@ -1,4 +1,3 @@
-// src/physics.js
 const DAMPING = 0.998;
 
 export class Particle {
@@ -83,7 +82,7 @@ function resolveCircleSegment(p, seg) {
     ny = dy / d;
   }
   
-  // Защита от проваливания под горизонтальный пол
+  // Защита от проваливания сквозь горизонтальный пол
   if (seg.y1 === seg.y2 && p.y > seg.y1) {
     ny = -1; nx = 0; d = p.y - seg.y1;
   }
