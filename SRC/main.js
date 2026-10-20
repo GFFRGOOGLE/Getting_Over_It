@@ -4,6 +4,24 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const VIEW = { width: 0, height: 0, dpr: 1 };
 
+// UI Элементы
+const timerEl = document.getElementById('timer');
+const fallsEl = document.getElementById('falls');
+const pauseBtn = document.getElementById('pause-btn');
+const pauseMenu = document.getElementById('pause-menu');
+const resumeBtn = document.getElementById('resume-btn');
+const restartBtn = document.getElementById('restart-btn');
+const winScreen = document.getElementById('win-screen');
+const winTime = document.getElementById('win-time');
+const winFalls = document.getElementById('win-falls');
+const winRestartBtn = document.getElementById('win-restart-btn');
+
+// Состояние игры
+let gameState = 'playing'; // 'playing', 'paused', 'won'
+let startTime = performance.now();
+let timeElapsed = 0;
+let falls = 0;
+
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = canvas.clientWidth;
@@ -33,11 +51,14 @@ world.addSegment(new Segment(300, 400, 600, 300, 0.95));
 world.addSegment(new Segment(600, 300, 800, 300, 0.95));    
 world.addSegment(new Segment(800, 300, 800, 100, 0.95));    
 world.addSegment(new Segment(800, 100, 1100, 50, 0.95));    
+// Финальный уступ (победа)
+world.addSegment(new Segment(1100, 50, 1200, 50, 0.95));
 
-// Котёл тяжелый (invMass = 0.05, масса 20)
-const pot = new Particle(100, 570, 30, 0.05); 
-// Молот легкий (invMass = 1.0, масса 1)
-const head = new Particle(100, 410, 20, 1.0); 
+// --- ИГРОК ---
+// Котёл (высокое трение, чтобы не скользил по склонам)
+const pot = new Particle(100, 570, 30, 0.1, 1.0); 
+// Молот (низкое трение, чтобы скользил под котлом)
+const head = new Particle(100, 410, 20, 0.5, 0.1); 
 
 world.addParticle(pot);
 world.addParticle(head);
@@ -48,18 +69,20 @@ world.addConstraint(new DistanceConstraint(pot, head, poleLength));
 const input = { x: 100, y: 410, active: false };
 
 function updatePointer(e) {
+  if (gameState !== 'playing') return;
   const rect = canvas.getBoundingClientRect();
   input.x = e.clientX - rect.left;
   input.y = e.clientY - rect.top;
 }
 canvas.addEventListener('pointerdown', (e) => {
+  if (gameState !== 'playing') return;
   canvas.setPointerCapture(e.pointerId);
   updatePointer(e);
   input.active = true;
 });
 canvas.addEventListener('pointermove', (e) => {
   updatePointer(e);
-  input.active = true;
+  if (gameState === 'playing') input.active = true;
 });
 canvas.addEventListener('pointerup', (e) => {
   if (e.pointerType !== 'mouse') input.active = false;
@@ -83,69 +106,76 @@ let lastTime = performance.now();
 function loop(now) {
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
-  acc += dt;
-  while (acc >= FIXED_DT) {
-    step(FIXED_DT);
-    acc -= FIXED_DT;
+  
+  if (gameState === 'playing') {
+    acc += dt;
+    while (acc >= FIXED_DT) {
+      step(FIXED_DT);
+      acc -= FIXED_DT;
+    }
+    updateCamera();
+    timeElapsed = (now - startTime) / 1000;
+    updateHUD();
   }
-  updateCamera();
+  
   render();
   requestAnimationFrame(loop);
 }
 
 function step(dt) {
   if (input.active) {
-    // Координаты пальца в мире
     const mx = input.x + camera.x;
     const my = input.y + camera.y;
 
-    // Угол от котла к пальцу
+    // Целевой угол к пальцу
     const targetAngle = Math.atan2(my - pot.y, mx - pot.x);
-    // Текущий угол молота
-    let currentAngle = Math.atan2(head.y - pot.y, head.x - pot.x);
+    const targetX = pot.x + Math.cos(targetAngle) * poleLength;
+    const targetY = pot.y + Math.sin(targetAngle) * poleLength;
 
-    // Разница углов (от -PI до PI)
-    let diff = targetAngle - currentAngle;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-
-    // ФИЗИКА: Угловой мотор. 
-    // Сила пропорциональна разнице углов.
-    const motorForce = diff * 5000; 
+    const dx = targetX - head.x;
+    const dy = targetY - head.y;
     
-    // Ограничиваем максимальную силу, чтобы не было телепортации
-    const maxForce = 20000;
-    const force = Math.max(-maxForce, Math.min(maxForce, motorForce));
+    // Мотор, который поворачивает молот
+    const k = 1500; 
+    const damping = 80;
 
-    // Прикладываем силу строго перпендикулярно палке (заставляем её вращаться)
-    const forceX = -Math.sin(currentAngle) * force;
-    const forceY = Math.cos(currentAngle) * force;
+    const vx = (head.x - head.px) / dt;
+    const vy = (head.y - head.py) / dt;
 
-    // Применяем к молоту
-    head.px -= forceX * dt * dt * head.invMass;
-    head.py -= forceY * dt * dt * head.invMass;
+    let ax = dx * k - vx * damping;
+    let ay = dy * k - vy * damping;
 
-    // Ограничение скорости для стабильности
-    let hvx = head.x - head.px;
-    let hvy = head.y - head.py;
-    const maxSpeed = 20; 
-    const speed = Math.hypot(hvx, hvy);
-    if (speed > maxSpeed) {
-      head.px = head.x - (hvx / speed) * maxSpeed;
-      head.py = head.y - (hvy / speed) * maxSpeed;
+    const maxAccel = 80000; 
+    const alen = Math.hypot(ax, ay);
+    if (alen > maxAccel) {
+      ax = (ax / alen) * maxAccel;
+      ay = (ay / alen) * maxAccel;
     }
+
+    head.px -= ax * dt * dt * head.invMass;
+    head.py -= ay * dt * dt * head.invMass;
   }
 
-  // Шаг физики
   world.step(dt, 20);
 
-  // Жёсткая страховка от проваливания
+  // Страховка
   if (pot.y > 600 - pot.radius) { pot.y = 600 - pot.radius; pot.py = pot.y; }
   if (head.y > 600 - head.radius) { head.y = 600 - head.radius; head.py = head.y; }
 
+  // Падение
   if (pot.y > 1200) {
+    falls++;
     pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
     head.x = 100; head.y = 410; head.px = head.x; head.py = head.y;
+  }
+
+  // Победа
+  if (pot.y < 50 && pot.x > 1100) {
+    gameState = 'won';
+    winTime.textContent = formatTime(timeElapsed);
+    winFalls.textContent = falls;
+    winScreen.classList.remove('hidden');
+    input.active = false;
   }
 }
 
@@ -219,5 +249,51 @@ function render() {
   ctx.restore();
 }
 
+// --- UI Функции ---
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function updateHUD() {
+  timerEl.textContent = formatTime(timeElapsed);
+  fallsEl.textContent = `Падений: ${falls}`;
+}
+
+pauseBtn.addEventListener('click', () => {
+  if (gameState === 'playing') {
+    gameState = 'paused';
+    pauseMenu.classList.remove('hidden');
+    input.active = false;
+  }
+});
+
+resumeBtn.addEventListener('click', () => {
+  if (gameState === 'paused') {
+    gameState = 'playing';
+    pauseMenu.classList.add('hidden');
+    lastTime = performance.now();
+  }
+});
+
+function restartGame() {
+  gameState = 'playing';
+  startTime = performance.now();
+  timeElapsed = 0;
+  falls = 0;
+  pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
+  head.x = 100; head.y = 410; head.px = head.x; head.py = head.y;
+  camera.x = 0; camera.y = 0;
+  pauseMenu.classList.add('hidden');
+  winScreen.classList.add('hidden');
+  input.active = false;
+  lastTime = performance.now();
+}
+
+restartBtn.addEventListener('click', restartGame);
+winRestartBtn.addEventListener('click', restartGame);
+
 resize();
+updateHUD();
 requestAnimationFrame(loop);
