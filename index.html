@@ -11,6 +11,33 @@
   <div id="game-wrap">
     <canvas id="game"></canvas>
   </div>
-  <script type="module" src="SRC/main.js"></script>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hud-left">
+      <button id="pause-btn">⏸️</button>
+      <span id="timer">00:00</span>
+    </div>
+    <div id="hud-right">
+      <span id="falls">Падений: 0</span>
+    </div>
+  </div>
+
+  <!-- Меню паузы -->
+  <div id="pause-menu" class="hidden">
+    <h2>Пауза</h2>
+    <button id="resume-btn">Продолжить</button>
+    <button id="restart-btn">Начать заново</button>
+  </div>
+
+  <!-- Экран победы -->
+  <div id="win-screen" class="hidden">
+    <h1>Победа!</h1>
+    <p>Время: <span id="win-time"></span></p>
+    <p>Падений: <span id="win-falls"></span></p>
+    <button id="win-restart-btn">Играть снова</button>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>
