@@ -1,4 +1,4 @@
-// src/physics.js — Физическое ядро
+// src/physics.js
 const DAMPING = 0.998;
 
 export class Particle {
@@ -72,32 +72,36 @@ function resolveCircleSegment(p, seg) {
   
   if (d >= r) return false;
   
+  let nx = 0, ny = 0;
   if (d < 1e-9) {
-    const nx = -(seg.y2 - seg.y1);
-    const ny = (seg.x2 - seg.x1);
+    nx = -(seg.y2 - seg.y1);
+    ny = (seg.x2 - seg.x1);
     const nl = Math.hypot(nx, ny) || 1;
-    dx = nx / nl; dy = ny / nl;
+    nx /= nl; ny /= nl;
   } else {
-    dx /= d; dy /= d;
+    nx = dx / d;
+    ny = dy / d;
+  }
+  
+  // Защита от проваливания под горизонтальный пол
+  if (seg.y1 === seg.y2 && p.y > seg.y1) {
+    ny = -1; nx = 0; d = p.y - seg.y1;
   }
   
   const push = r - d;
+  if (push <= 0) return false;
+  
+  p.x += nx * push;
+  p.y += ny * push;
+  
   const vx = p.x - p.px;
   const vy = p.y - p.py;
+  const vn = vx * nx + vy * ny;
+  const tvx = vx - nx * vn;
+  const tvy = vy - ny * vn;
   
-  p.x += dx * push;
-  p.y += dy * push;
-  
-  // Правильное трение
-  const vn = vx * dx + vy * dy; 
-  const tvx = vx - dx * vn;     
-  const tvy = vy - dy * vn;
-  
-  const newTvx = tvx * (1 - seg.friction);
-  const newTvy = tvy * (1 - seg.friction);
-  
-  p.px = p.x - (dx * vn + newTvx);
-  p.py = p.y - (dy * vn + newTvy);
+  p.px = p.x - (nx * vn + tvx * (1 - seg.friction));
+  p.py = p.y - (ny * vn + tvy * (1 - seg.friction));
   return true;
 }
 
