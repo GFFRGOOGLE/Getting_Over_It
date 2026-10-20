@@ -1,14 +1,12 @@
-// src/physics.js
-// Лёгкий Verlet-движок для 2D-клонов Getting Over It.
-
-const DAMPING = 0.998; // сопротивление воздуха
+// src/physics.js — Физическое ядро
+const DAMPING = 0.998;
 
 export class Particle {
   constructor(x, y, radius = 0, invMass = 1) {
     this.x = x;   this.y = y;
-    this.px = x;  this.py = y; // предыдущая позиция (для Verlet)
+    this.px = x;  this.py = y;
     this.radius = radius;
-    this.invMass = invMass;    // 0 = закреплённая
+    this.invMass = invMass;
   }
 
   integrate(dt, gx, gy) {
@@ -20,9 +18,6 @@ export class Particle {
     this.x += vx + gx * dt * dt;
     this.y += vy + gy * dt * dt;
   }
-
-  get vx() { return this.x - this.px; }
-  get vy() { return this.y - this.py; }
 }
 
 export class DistanceConstraint {
@@ -40,7 +35,7 @@ export class DistanceConstraint {
     if (w === 0) return;
     const nx = dx / d;
     const ny = dy / d;
-    const C = d - this.restLength; // >0 — растянута, <0 — сжата
+    const C = d - this.restLength;
     const ka = (a.invMass / w) * C;
     const kb = (b.invMass / w) * C;
     a.x += nx * ka;
@@ -54,7 +49,7 @@ export class Segment {
   constructor(x1, y1, x2, y2, friction = 0.9) {
     this.x1 = x1; this.y1 = y1;
     this.x2 = x2; this.y2 = y2;
-    this.friction = friction; // 0=лёд, 1=прилипание
+    this.friction = friction;
   }
 }
 
@@ -74,9 +69,10 @@ function resolveCircleSegment(p, seg) {
   let dy = p.y - c.y;
   let d = Math.hypot(dx, dy);
   const r = p.radius;
+  
   if (d >= r) return false;
+  
   if (d < 1e-9) {
-    // Центр ровно на отрезке — берём нормаль к нему
     const nx = -(seg.y2 - seg.y1);
     const ny = (seg.x2 - seg.x1);
     const nl = Math.hypot(nx, ny) || 1;
@@ -84,17 +80,24 @@ function resolveCircleSegment(p, seg) {
   } else {
     dx /= d; dy /= d;
   }
+  
   const push = r - d;
   const vx = p.x - p.px;
   const vy = p.y - p.py;
+  
   p.x += dx * push;
   p.y += dy * push;
-  // Убиваем нормальную скорость, к тангенциальной применяем трение
-  const vn = vx * dx + vy * dy;
-  const tvx = (vx - dx * vn) * seg.friction;
-  const tvy = (vy - dy * vn) * seg.friction;
-  p.px = p.x - tvx;
-  p.py = p.y - tvy;
+  
+  // Правильное трение
+  const vn = vx * dx + vy * dy; 
+  const tvx = vx - dx * vn;     
+  const tvy = vy - dy * vn;
+  
+  const newTvx = tvx * (1 - seg.friction);
+  const newTvy = tvy * (1 - seg.friction);
+  
+  p.px = p.x - (dx * vn + newTvx);
+  p.py = p.y - (dy * vn + newTvy);
   return true;
 }
 
@@ -103,7 +106,7 @@ export class World {
     this.particles = [];
     this.constraints = [];
     this.segments = [];
-    this.gravity = { x: 0, y: 1800 }; // px/s²
+    this.gravity = { x: 0, y: 2000 };
   }
   addParticle(p) { this.particles.push(p); return p; }
   addConstraint(c) { this.constraints.push(c); return c; }
@@ -119,4 +122,4 @@ export class World {
       }
     }
   }
-  }
+}
