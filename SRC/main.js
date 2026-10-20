@@ -1,4 +1,4 @@
-// SRC/main.js — Шаг 3 (Исправленная физика)
+// SRC/main.js — Шаг 3 (Исправленная физика и полный код)
 import { Particle, DistanceConstraint, Segment, World } from './physics.js';
 
 const canvas = document.getElementById('game');
@@ -31,7 +31,7 @@ world.addSegment(new Segment(1100, 50, 1300, 150, 0.9));   // 6
 world.addSegment(new Segment(1300, 150, 1500, -200, 0.9)); // 7
 
 // --- Игрок ---
-// Котёл делаем тяжелым (invMass = 0.2, то есть масса 5)
+// Котёл тяжелее молота (invMass = 0.2)
 const pot = new Particle(100, 570, 30, 0.2); 
 // Молот легче (invMass = 1)
 const head = new Particle(100, 430, 14, 1); 
@@ -97,26 +97,21 @@ function step(dt) {
     const mx = input.x + camera.x;
     const my = input.y + camera.y;
     
-    // Вектор от котла к пальцу/мыши
     let dx = mx - pot.x;
     let dy = my - pot.y;
     const dl = Math.hypot(dx, dy) || 1;
     dx /= dl; dy /= dl;
     
-    // Идеальная позиция для головы молота (на расстоянии длины палки от котла)
     const tx = pot.x + dx * poleLength;
     const ty = pot.y + dy * poleLength;
     
-    // Разница между идеальной позицией и текущей
     let hx = tx - head.x;
     let hy = ty - head.y;
     
-    // ФИЗИКА: Вместо телепорта прикладываем "силу пружины"
-    const k = 1500; // Жесткость
+    const k = 1500; // Жесткость пружины
     let ax = hx * k;
     let ay = hy * k;
     
-    // Ограничиваем максимальную силу, чтобы не было реактивной тяги
     const maxAccel = 6000;
     const alen = Math.hypot(ax, ay);
     if (alen > maxAccel) {
@@ -124,15 +119,12 @@ function step(dt) {
       ay = (ay / alen) * maxAccel;
     }
     
-    // Применяем ускорение к молоту (через Verlet)
     head.px -= ax * dt * dt;
     head.py -= ay * dt * dt;
   }
   
-  // Шаг физики (гравитация, коллизии, трение)
   world.step(dt);
   
-  // Упал вниз — респавн
   if (pot.y > 1200) {
     pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
     head.x = 100; head.y = 430; head.px = head.x; head.py = head.y;
@@ -203,5 +195,6 @@ function render() {
   ctx.restore();
 }
 
+// Запуск
 resize();
 requestAnimationFrame(loop);
