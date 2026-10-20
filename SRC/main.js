@@ -1,4 +1,4 @@
-// SRC/main.js — Шаг 3 (Прямое управление, прочный пол, человечек всегда смотрит вверх)
+// SRC/main.js — Шаг 3 (Настоящая физика Getting Over It)
 import { Particle, DistanceConstraint, Segment, World } from './physics.js';
 
 const canvas = document.getElementById('game');
@@ -19,21 +19,23 @@ window.addEventListener('orientationchange', resize);
 
 // --- Мир ---
 const world = new World();
-world.gravity.y = 2000;
+world.gravity.y = 2500; // Усилили гравитацию
 
-// Огромная земля
-world.addSegment(new Segment(-5000, 600, 5000, 600, 0.95));
+// Земля с очень высоким трением (1.0 = не скользит)
+world.addSegment(new Segment(-5000, 600, 5000, 600, 1.0));
 
 // Препятствия
-world.addSegment(new Segment(300, 600, 300, 400, 0.9));    
-world.addSegment(new Segment(300, 400, 600, 300, 0.9));    
-world.addSegment(new Segment(600, 300, 800, 300, 0.9));    
-world.addSegment(new Segment(800, 300, 800, 100, 0.9));    
-world.addSegment(new Segment(800, 100, 1100, 50, 0.9));    
+world.addSegment(new Segment(300, 600, 300, 400, 0.95));    
+world.addSegment(new Segment(300, 400, 600, 300, 0.95));    
+world.addSegment(new Segment(600, 300, 800, 300, 0.95));    
+world.addSegment(new Segment(800, 300, 800, 100, 0.95));    
+world.addSegment(new Segment(800, 100, 1100, 50, 0.95));    
 
 // --- Игрок ---
-const pot = new Particle(100, 570, 30, 0.5); 
-const head = new Particle(100, 410, 20, 1.0); 
+// Котёл ОЧЕНЬ тяжелый (invMass = 0.02, то есть масса 50)
+const pot = new Particle(100, 570, 30, 0.02); 
+// Молот имеет нормальный вес (invMass = 0.5, масса 2)
+const head = new Particle(100, 410, 20, 0.5); 
 world.addParticle(pot);
 world.addParticle(head);
 
@@ -96,8 +98,9 @@ function step(dt) {
     const tx = input.x + camera.x;
     const ty = input.y + camera.y;
 
-    const k = 2000; 
-    const damping = 100; 
+    // Пружина, которая тянет молот к пальцу
+    const k = 1000; 
+    const damping = 50; 
 
     const vx = (head.x - head.px) / dt;
     const vy = (head.y - head.py) / dt;
@@ -105,7 +108,8 @@ function step(dt) {
     let ax = (tx - head.x) * k - vx * damping;
     let ay = (ty - head.y) * k - vy * damping;
 
-    const maxAccel = 100000; 
+    // СИЛА ОГРАНИЧЕНА! Теперь палец не может поднять котёл в воздух просто так.
+    const maxAccel = 8000; 
     const alen = Math.hypot(ax, ay);
     if (alen > maxAccel) {
       ax = (ax / alen) * maxAccel;
@@ -116,9 +120,10 @@ function step(dt) {
     head.py -= ay * dt * dt;
   }
 
+  // Шаг физики (20 итераций для надежного трения)
   world.step(dt, 20);
 
-  // Жесткий пол
+  // Жесткий пол (защита от проваливания)
   if (pot.y > 600 - pot.radius) {
     pot.y = 600 - pot.radius;
     pot.py = pot.y;
@@ -128,6 +133,7 @@ function step(dt) {
     head.py = head.y;
   }
 
+  // Респавн
   if (pot.y > 1200) {
     pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
     head.x = 100; head.y = 410; head.px = head.x; head.py = head.y;
@@ -158,7 +164,7 @@ function render() {
     ctx.stroke();
   }
 
-  // Древко молотка
+  // Древко
   ctx.strokeStyle = '#d4a373';
   ctx.lineWidth = 6;
   ctx.beginPath();
@@ -175,12 +181,9 @@ function render() {
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  // --- Человечек (ВСЕГДА СМОТРИТ ВВЕРХ) ---
+  // --- Человечек (всегда смотрит вверх) ---
   ctx.fillStyle = '#e0b088';
-  // Тело (торчит из котла)
   ctx.fillRect(pot.x - 8, pot.y - 38, 16, 30); 
-  
-  // Голова
   ctx.beginPath();
   ctx.arc(pot.x, pot.y - 48, 11, 0, Math.PI * 2);
   ctx.fill();
@@ -191,7 +194,7 @@ function render() {
   ctx.arc(pot.x + 4, pot.y - 50, 2.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Ободок котла (чтобы человечек казался внутри)
+  // Ободок котла
   ctx.strokeStyle = '#888';
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -199,21 +202,20 @@ function render() {
   ctx.lineTo(pot.x + pot.radius - 5, pot.y - 10);
   ctx.stroke();
 
-  // --- Голова молотка ---
+  // --- Голова молота ---
   const angle = Math.atan2(head.y - pot.y, head.x - pot.x);
   ctx.save();
   ctx.translate(head.x, head.y);
   ctx.rotate(angle);
-  
   ctx.fillStyle = '#888';
-  ctx.fillRect(-8, -12, 16, 24); // Крепление
+  ctx.fillRect(-8, -12, 16, 24);
   ctx.fillStyle = '#ccc';
-  ctx.fillRect(0, -22, 28, 44); // Боёк молота
+  ctx.fillRect(0, -22, 28, 44);
   ctx.strokeStyle = '#aaa';
   ctx.lineWidth = 2;
   ctx.strokeRect(0, -22, 28, 44);
-  
   ctx.restore();
+  
   ctx.restore();
 }
 
