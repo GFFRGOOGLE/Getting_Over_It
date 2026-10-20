@@ -34,6 +34,72 @@ canvas#game {
   touch-action: none;
 }
 
+/* --- Оверлеи (Меню) --- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 20, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  transition: opacity 0.3s;
+}
+
+.overlay h1 {
+  font-size: 36px;
+  margin-bottom: 5px;
+  color: #fff;
+  text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.overlay h2 {
+  font-size: 28px;
+  margin-bottom: 20px;
+  color: #fff;
+}
+
+.overlay p {
+  font-size: 18px;
+  margin-bottom: 20px;
+  color: #aaa;
+}
+
+.overlay button {
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  margin: 8px;
+  width: 220px;
+  transition: transform 0.1s, filter 0.2s;
+}
+
+.overlay button:active {
+  transform: scale(0.95);
+}
+
+.overlay button:hover {
+  filter: brightness(1.1);
+}
+
+.btn-green {
+  background: #4CAF50;
+  color: white;
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+}
+
+.btn-red {
+  background: #f44336;
+  color: white;
+  box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+}
+
 /* --- HUD --- */
 #hud {
   position: fixed;
@@ -45,9 +111,6 @@ canvas#game {
   justify-content: space-between;
   align-items: center;
   pointer-events: none;
-  font-weight: bold;
-  font-size: 18px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
   z-index: 10;
 }
 
@@ -63,60 +126,22 @@ canvas#game {
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   font-size: 20px;
-  padding: 5px 12px;
+  padding: 6px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s;
+  backdrop-filter: blur(4px);
 }
 
-#pause-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+#hud span {
+  font-size: 20px;
+  font-weight: bold;
+  text-shadow: 0 2px 5px rgba(0,0,0,0.8);
 }
 
-/* --- Меню --- */
+#hud-right span {
+  color: #ff5252;
+}
+
 .hidden {
   display: none !important;
-}
-
-#pause-menu, #win-screen {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  z-index: 20;
-  backdrop-filter: blur(5px);
-}
-
-#pause-menu h2, #win-screen h1 {
-  font-size: 32px;
-  margin-bottom: 20px;
-}
-
-#pause-menu button, #win-screen button {
-  background: #4CAF50;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  font-size: 18px;
-  border-radius: 8px;
-  margin: 10px;
-  cursor: pointer;
-  width: 200px;
-  transition: transform 0.1s;
-}
-
-#pause-menu button:active, #win-screen button:active {
-  transform: scale(0.95);
-}
-
-#restart-btn, #win-restart-btn {
-  background: #f44336;
-}
-
-#win-screen p {
-  font-size: 20px;
-  margin: 5px 0;
 }
