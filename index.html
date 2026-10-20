@@ -12,8 +12,8 @@
     <canvas id="game"></canvas>
   </div>
 
-  <!-- HUD -->
-  <div id="hud">
+  <!-- HUD (Интерфейс) -->
+  <div id="hud" class="hidden">
     <div id="hud-left">
       <button id="pause-btn">⏸️</button>
       <span id="timer">00:00</span>
@@ -23,19 +23,26 @@
     </div>
   </div>
 
+  <!-- Главное меню -->
+  <div id="start-screen" class="overlay">
+    <h1>Getting Over It</h1>
+    <p>2D Clone</p>
+    <button id="start-btn" class="btn-green">Играть</button>
+  </div>
+
   <!-- Меню паузы -->
-  <div id="pause-menu" class="hidden">
+  <div id="pause-menu" class="overlay hidden">
     <h2>Пауза</h2>
-    <button id="resume-btn">Продолжить</button>
-    <button id="restart-btn">Начать заново</button>
+    <button id="resume-btn" class="btn-green">Продолжить</button>
+    <button id="restart-btn" class="btn-red">Начать заново</button>
   </div>
 
   <!-- Экран победы -->
-  <div id="win-screen" class="hidden">
+  <div id="win-screen" class="overlay hidden">
     <h1>Победа!</h1>
-    <p>Время: <span id="win-time"></span></p>
-    <p>Падений: <span id="win-falls"></span></p>
-    <button id="win-restart-btn">Играть снова</button>
+    <p>Время: <span id="win-time">00:00</span></p>
+    <p>Падений: <span id="win-falls">0</span></p>
+    <button id="win-restart-btn" class="btn-green">Играть снова</button>
   </div>
 
   <script type="module" src="src/main.js"></script>
