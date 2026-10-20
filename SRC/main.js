@@ -4,11 +4,14 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const VIEW = { width: 0, height: 0, dpr: 1 };
 
-// UI Элементы
+// UI
+const hud = document.getElementById('hud');
 const timerEl = document.getElementById('timer');
 const fallsEl = document.getElementById('falls');
-const pauseBtn = document.getElementById('pause-btn');
+const startScreen = document.getElementById('start-screen');
+const startBtn = document.getElementById('start-btn');
 const pauseMenu = document.getElementById('pause-menu');
+const pauseBtn = document.getElementById('pause-btn');
 const resumeBtn = document.getElementById('resume-btn');
 const restartBtn = document.getElementById('restart-btn');
 const winScreen = document.getElementById('win-screen');
@@ -16,9 +19,9 @@ const winTime = document.getElementById('win-time');
 const winFalls = document.getElementById('win-falls');
 const winRestartBtn = document.getElementById('win-restart-btn');
 
-// Состояние игры
-let gameState = 'playing'; // 'playing', 'paused', 'won'
-let startTime = performance.now();
+// Состояние
+let gameState = 'menu'; // 'menu', 'playing', 'paused', 'won'
+let startTime = 0;
 let timeElapsed = 0;
 let falls = 0;
 
@@ -37,34 +40,29 @@ window.addEventListener('orientationchange', resize);
 const world = new World();
 world.gravity.y = 2000;
 
-// Гора слева с козырьком
+// Карта
 world.addSegment(new Segment(-300, 600, -300, -100, 0.95));
 world.addSegment(new Segment(-300, -100, 0, -50, 0.95));
 world.addSegment(new Segment(0, -50, 0, -300, 0.95));
-
-// Земля
 world.addSegment(new Segment(-300, 600, 5000, 600, 0.95));
-
-// Препятствия
 world.addSegment(new Segment(300, 600, 300, 400, 0.95));    
 world.addSegment(new Segment(300, 400, 600, 300, 0.95));    
 world.addSegment(new Segment(600, 300, 800, 300, 0.95));    
 world.addSegment(new Segment(800, 300, 800, 100, 0.95));    
 world.addSegment(new Segment(800, 100, 1100, 50, 0.95));    
-// Финальный уступ (победа)
-world.addSegment(new Segment(1100, 50, 1200, 50, 0.95));
 
-// --- ИГРОК ---
-// Котёл (высокое трение, чтобы не скользил по склонам)
-const pot = new Particle(100, 570, 30, 0.1, 1.0); 
-// Молот (низкое трение, чтобы скользил под котлом)
-const head = new Particle(100, 410, 20, 0.5, 0.1); 
+// Игрок
+const pot = new Particle(100, 570, 30, 0.1, 1.0); // Тяжелый, трение 1
+const mid = new Particle(100, 490, 10, 0.5, 0.1); // Середина палки, скользит
+const head = new Particle(100, 410, 20, 0.5, 0.1); // Молот, скользит
 
 world.addParticle(pot);
+world.addParticle(mid);
 world.addParticle(head);
 
 const poleLength = 180;
-world.addConstraint(new DistanceConstraint(pot, head, poleLength));
+world.addConstraint(new DistanceConstraint(pot, mid, poleLength / 2));
+world.addConstraint(new DistanceConstraint(mid, head, poleLength / 2));
 
 const input = { x: 100, y: 410, active: false };
 
@@ -126,26 +124,28 @@ function step(dt) {
   if (input.active) {
     const mx = input.x + camera.x;
     const my = input.y + camera.y;
-
-    // Целевой угол к пальцу
-    const targetAngle = Math.atan2(my - pot.y, mx - pot.x);
-    const targetX = pot.x + Math.cos(targetAngle) * poleLength;
-    const targetY = pot.y + Math.sin(targetAngle) * poleLength;
-
-    const dx = targetX - head.x;
-    const dy = targetY - head.y;
     
-    // Мотор, который поворачивает молот
-    const k = 1500; 
-    const damping = 80;
+    // Вектор от котла к пальцу
+    let dx = mx - pot.x;
+    let dy = my - pot.y;
+    const dl = Math.hypot(dx, dy) || 1;
+    dx /= dl; dy /= dl;
+    
+    // Куда должен стремиться молот
+    const targetX = pot.x + dx * poleLength;
+    const targetY = pot.y + dy * poleLength;
+
+    // Пружина тянет голову молота к цели
+    const k = 3000; 
+    const damping = 150; 
 
     const vx = (head.x - head.px) / dt;
     const vy = (head.y - head.py) / dt;
 
-    let ax = dx * k - vx * damping;
-    let ay = dy * k - vy * damping;
+    let ax = (targetX - head.x) * k - vx * damping;
+    let ay = (targetY - head.y) * k - vy * damping;
 
-    const maxAccel = 80000; 
+    const maxAccel = 50000; 
     const alen = Math.hypot(ax, ay);
     if (alen > maxAccel) {
       ax = (ax / alen) * maxAccel;
@@ -158,18 +158,20 @@ function step(dt) {
 
   world.step(dt, 20);
 
-  // Страховка
+  // Защита от проваливания
   if (pot.y > 600 - pot.radius) { pot.y = 600 - pot.radius; pot.py = pot.y; }
+  if (mid.y > 600 - mid.radius) { mid.y = 600 - mid.radius; mid.py = mid.y; }
   if (head.y > 600 - head.radius) { head.y = 600 - head.radius; head.py = head.y; }
 
   // Падение
   if (pot.y > 1200) {
     falls++;
     pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
+    mid.x = 100; mid.y = 490; mid.px = mid.x; mid.py = mid.y;
     head.x = 100; head.y = 410; head.px = head.x; head.py = head.y;
   }
 
-  // Победа
+  // Победа (проверка стоит только если играем)
   if (pot.y < 50 && pot.x > 1100) {
     gameState = 'won';
     winTime.textContent = formatTime(timeElapsed);
@@ -200,13 +202,16 @@ function render() {
     ctx.stroke();
   }
 
+  // Рисуем древко (ломаная)
   ctx.strokeStyle = '#d4a373';
   ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.moveTo(pot.x, pot.y);
+  ctx.lineTo(mid.x, mid.y);
   ctx.lineTo(head.x, head.y);
   ctx.stroke();
 
+  // Котёл
   ctx.fillStyle = '#2b2b36';
   ctx.beginPath();
   ctx.arc(pot.x, pot.y, pot.radius, 0, Math.PI * 2);
@@ -215,6 +220,7 @@ function render() {
   ctx.lineWidth = 4;
   ctx.stroke();
 
+  // Человечек
   ctx.fillStyle = '#e0b088';
   ctx.fillRect(pot.x - 8, pot.y - 38, 16, 30); 
   ctx.beginPath();
@@ -233,7 +239,8 @@ function render() {
   ctx.lineTo(pot.x + pot.radius - 5, pot.y - 10);
   ctx.stroke();
 
-  const angle = Math.atan2(head.y - pot.y, head.x - pot.x);
+  // Молот
+  const angle = Math.atan2(head.y - mid.y, head.x - mid.x);
   ctx.save();
   ctx.translate(head.x, head.y);
   ctx.rotate(angle);
@@ -249,7 +256,7 @@ function render() {
   ctx.restore();
 }
 
-// --- UI Функции ---
+// UI Функции
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = Math.floor(seconds % 60).toString().padStart(2, '0');
@@ -260,6 +267,27 @@ function updateHUD() {
   timerEl.textContent = formatTime(timeElapsed);
   fallsEl.textContent = `Падений: ${falls}`;
 }
+
+function resetGame() {
+  pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
+  mid.x = 100; mid.y = 490; mid.px = mid.x; mid.py = mid.y;
+  head.x = 100; head.y = 410; head.px = head.x; head.py = head.y;
+  camera.x = 0; camera.y = 0;
+  falls = 0;
+  timeElapsed = 0;
+  updateHUD();
+  input.active = false;
+}
+
+// Кнопки
+startBtn.addEventListener('click', () => {
+  gameState = 'playing';
+  startScreen.classList.add('hidden');
+  hud.classList.remove('hidden');
+  resetGame();
+  startTime = performance.now();
+  lastTime = performance.now();
+});
 
 pauseBtn.addEventListener('click', () => {
   if (gameState === 'playing') {
@@ -277,23 +305,21 @@ resumeBtn.addEventListener('click', () => {
   }
 });
 
-function restartGame() {
+restartBtn.addEventListener('click', () => {
   gameState = 'playing';
-  startTime = performance.now();
-  timeElapsed = 0;
-  falls = 0;
-  pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
-  head.x = 100; head.y = 410; head.px = head.x; head.py = head.y;
-  camera.x = 0; camera.y = 0;
   pauseMenu.classList.add('hidden');
-  winScreen.classList.add('hidden');
-  input.active = false;
+  resetGame();
+  startTime = performance.now();
   lastTime = performance.now();
-}
+});
 
-restartBtn.addEventListener('click', restartGame);
-winRestartBtn.addEventListener('click', restartGame);
+winRestartBtn.addEventListener('click', () => {
+  gameState = 'playing';
+  winScreen.classList.add('hidden');
+  resetGame();
+  startTime = performance.now();
+  lastTime = performance.now();
+});
 
 resize();
-updateHUD();
 requestAnimationFrame(loop);
