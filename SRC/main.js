@@ -1,4 +1,4 @@
-// SRC/main.js — Шаг 3 (Исправленная физика, прочный пол и огромная земля)
+// SRC/main.js — Шаг 3 (Прямое управление, прочный пол, правильная отрисовка)
 import { Particle, DistanceConstraint, Segment, World } from './physics.js';
 
 const canvas = document.getElementById('game');
@@ -19,34 +19,32 @@ window.addEventListener('orientationchange', resize);
 
 // --- Мир ---
 const world = new World();
-world.gravity.y = 2000; // Чуть сильнее гравитация
+world.gravity.y = 2000; // Гравитация
 
-// Огромная земля (от -5000 до 5000)
-world.addSegment(new Segment(-5000, 600, 5000, 600, 0.95)); 
+// Физический пол (проходит сквозь весь уровень)
+world.addSegment(new Segment(-5000, 600, 5000, 600, 0.95));
 
-// Горка (препятствия)
+// Препятствия (уступы)
 world.addSegment(new Segment(300, 600, 300, 400, 0.9));    
 world.addSegment(new Segment(300, 400, 600, 300, 0.9));    
 world.addSegment(new Segment(600, 300, 800, 300, 0.9));    
 world.addSegment(new Segment(800, 300, 800, 100, 0.9));    
 world.addSegment(new Segment(800, 100, 1100, 50, 0.9));    
-world.addSegment(new Segment(1100, 50, 1300, 150, 0.9));   
-world.addSegment(new Segment(1300, 150, 1500, -200, 0.9)); 
 
 // --- Игрок ---
-// Котёл тяжелее (invMass = 0.5, масса 2)
+// Котёл тяжелее молота (invMass = 0.5)
 const pot = new Particle(100, 570, 30, 0.5); 
-// Молот легче (invMass = 1)
-const head = new Particle(100, 430, 14, 1.0); 
+// Молот (invMass = 1)
+const head = new Particle(100, 410, 20, 1.0); 
 world.addParticle(pot);
 world.addParticle(head);
 
-// Увеличили длину молота для лучшего рычага
-const poleLength = 160;
+// Длина палки
+const poleLength = 180;
 world.addConstraint(new DistanceConstraint(pot, head, poleLength));
 
 // --- Ввод ---
-const input = { x: 100, y: 430, active: false };
+const input = { x: 100, y: 410, active: false };
 
 function updatePointer(e) {
   const rect = canvas.getBoundingClientRect();
@@ -98,48 +96,49 @@ function loop(now) {
 
 function step(dt) {
   if (input.active) {
-    const mx = input.x + camera.x;
-    const my = input.y + camera.y;
-    
-    // Вектор от котла к пальцу
-    let dx = mx - pot.x;
-    let dy = my - pot.y;
-    const dl = Math.hypot(dx, dy) || 1;
-    dx /= dl; dy /= dl;
-    
-    // Идеальная точка для головы молота
-    const tx = pot.x + dx * poleLength;
-    const ty = pot.y + dy * poleLength;
-    
-    // ФИЗИКА: PD-контроллер (Пружина + Демпфер)
-    // Заставляет молот плавно стремиться к цели, но не телепортирует его
-    const k = 400; // Жесткость пружины
-    const damping = 25; // Демпфер (гасит колебания)
-    
+    // Теперь мышка (палец) — это ПРЯМАЯ цель для молота!
+    const tx = input.x + camera.x;
+    const ty = input.y + camera.y;
+
+    // Физика: Пружина + Демпфер (PD-контроллер)
+    const k = 2000; 
+    const damping = 100; 
+
     const vx = (head.x - head.px) / dt;
     const vy = (head.y - head.py) / dt;
-    
+
     let ax = (tx - head.x) * k - vx * damping;
     let ay = (ty - head.y) * k - vy * damping;
-    
-    // Ограничение максимальной силы, чтобы котёл не улетал
-    const maxAccel = 12000;
+
+    // Ограничиваем силу, чтобы не было телепортации
+    const maxAccel = 100000; 
     const alen = Math.hypot(ax, ay);
     if (alen > maxAccel) {
       ax = (ax / alen) * maxAccel;
       ay = (ay / alen) * maxAccel;
     }
-    
+
     head.px -= ax * dt * dt;
     head.py -= ay * dt * dt;
   }
-  
-  // Шаг физики (20 итераций для прочного пола)
+
+  // Шаг физики (20 итераций для надежных коллизий)
   world.step(dt, 20);
-  
+
+  // ЖЁСТКИЙ ПОЛ (Hard Clamp) — защита от проваливания
+  if (pot.y > 600 - pot.radius) {
+    pot.y = 600 - pot.radius;
+    pot.py = pot.y; // Гасим скорость падения вниз
+  }
+  if (head.y > 600 - head.radius) {
+    head.y = 600 - head.radius;
+    head.py = head.y; // Гасим скорость падения вниз
+  }
+
+  // Респавн, если упал ниже экрана
   if (pot.y > 1200) {
     pot.x = 100; pot.y = 570; pot.px = pot.x; pot.py = pot.y;
-    head.x = 100; head.y = 430; head.px = head.x; head.py = head.y;
+    head.x = 100; head.y = 410; head.px = head.x; head.py = head.y;
   }
 }
 
@@ -151,13 +150,13 @@ function render() {
   ctx.save();
   ctx.translate(-camera.x, -camera.y);
 
-  // Огромная земля (рисуем сплошным блоком)
+  // Сплошная земля на заднем фоне
   ctx.fillStyle = '#2a2a30';
   ctx.fillRect(-5000, 600, 10000, 2000);
 
-  // Отрисовка линий уровня поверх земли
+  // Отрисовка линий уровня
   ctx.strokeStyle = '#555';
-  ctx.lineWidth = 12;
+  ctx.lineWidth = 4; // Сделали тоньше, чтобы не казалось, что котёл тонет
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const s of world.segments) {
@@ -175,28 +174,19 @@ function render() {
   ctx.lineTo(head.x, head.y);
   ctx.stroke();
 
-  const angle = Math.atan2(head.y - pot.y, head.x - pot.x);
-  
-  // --- Человечек (рисуем ДО котла, чтобы он был внутри) ---
-  ctx.save();
-  ctx.translate(pot.x, pot.y);
-  ctx.rotate(angle);
-  
-  // Тело (торчит из котла)
+  // --- Человечек (рисуем до котла, чтобы он был внутри) ---
   ctx.fillStyle = '#e0b088'; 
-  ctx.fillRect(-8, -45, 16, 35); 
-  
+  // Тело
+  ctx.fillRect(pot.x - 8, pot.y - 40, 16, 30);
   // Голова
   ctx.beginPath();
-  ctx.arc(0, -55, 12, 0, Math.PI * 2);
+  ctx.arc(pot.x, pot.y - 50, 10, 0, Math.PI * 2);
   ctx.fill();
-  
   // Глаз
   ctx.fillStyle = '#000';
   ctx.beginPath();
-  ctx.arc(5, -58, 2.5, 0, Math.PI * 2);
+  ctx.arc(pot.x + 4, pot.y - 52, 2, 0, Math.PI * 2);
   ctx.fill();
-  ctx.restore();
 
   // --- Котёл (рисуем ПОВЕРХ тела) ---
   ctx.fillStyle = '#2b2b36';
@@ -208,22 +198,20 @@ function render() {
   ctx.stroke();
 
   // --- Голова молотка ---
+  const angle = Math.atan2(head.y - pot.y, head.x - pot.x);
   ctx.save();
   ctx.translate(head.x, head.y);
   ctx.rotate(angle);
   
-  // Рукоять (утолщение)
   ctx.fillStyle = '#888';
-  ctx.fillRect(-6, -16, 12, 32);
-  
-  // Сам молот (боёк)
+  ctx.fillRect(-8, -12, 16, 24);
   ctx.fillStyle = '#ccc';
-  ctx.fillRect(0, -20, 16, 40);
+  ctx.fillRect(0, -20, 24, 40);
   ctx.strokeStyle = '#aaa';
   ctx.lineWidth = 2;
-  ctx.strokeRect(0, -20, 16, 40);
+  ctx.strokeRect(0, -20, 24, 40);
+  
   ctx.restore();
-
   ctx.restore();
 }
 
